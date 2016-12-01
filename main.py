@@ -15,10 +15,12 @@ config = configparser.ConfigParser()
 config.optionxform = str
 config.read('config.ini')
 
-ssh = paramiko.SSHClient()
-ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-
 users = list(map(int, config['bot']['users'].split(',')))
+hosts = {
+    section[len('host:'):]: dict(config._sections[section])
+    for section in sorted(config.sections(), reverse=True)
+    if section[:len('host:')] == 'host:'
+    }
 
 
 def error(bot, update, err):
@@ -34,7 +36,7 @@ def index(bot, user_id, chat_id):
             chat_id=chat_id)
     keyboard = [[]]
     row = keyboard[0]
-    for host in config['hosts']:
+    for host in hosts:
         row.append(
             telegram.InlineKeyboardButton(host, callback_data=json.dumps({'host': host}))
         )
@@ -54,9 +56,15 @@ def query_handler(bot, update):
     data = json.loads(update.callback_query.data)
     if 'action' in data and 'host' in data:
         try:
-            host = config['hosts'][data['host']]
+            ssh = paramiko.SSHClient()
+            ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+            host = hosts[data['host']]
             command = config['commands'][data['action']]
-            ssh.connect(host)
+            if 'pkey' in host:
+                ssh.connect(host['host'], username=host['user'], key_filename=host['pkey'], timeout=2)
+            elif 'pass' in host:
+                logger.info('password')
+                ssh.connect(host['host'], username=host['user'], password=host['pass'], look_for_keys=False, timeout=2)
             _, stdout, stderr = ssh.exec_command(command)
             out = stdout.read().decode("utf-8").strip()
             err = stderr.read().decode("utf-8").strip()
