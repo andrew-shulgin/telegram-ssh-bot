@@ -34,6 +34,7 @@ def index(bot, user_id, chat_id):
             text='User *{}* is not allowed here. Sorry.'.format(user_id),
             parse_mode='Markdown',
             chat_id=chat_id)
+        return
     keyboard = [[]]
     row = keyboard[0]
     for host in hosts:
@@ -53,7 +54,17 @@ def start(bot, update):
 
 
 def query_handler(bot, update):
+    user_id = update.callback_query.from_user.id
+    chat_id = update.callback_query.message.chat.id
+    message_id = update.callback_query.message.message_id
     data = json.loads(update.callback_query.data)
+    if user_id not in users:
+        logger.warning('Unknown user: {}'.format(user_id))
+        bot.sendMessage(
+            text='User *{}* is not allowed here. Sorry.'.format(user_id),
+            parse_mode='Markdown',
+            chat_id=chat_id)
+        return
     if 'action' in data and 'host' in data:
         try:
             ssh = paramiko.SSHClient()
@@ -77,7 +88,7 @@ def query_handler(bot, update):
         except Exception as e:
             logger.error(e)
             bot.editMessageText(
-                text='*Erro*r: `{}`'.format(e),
+                text='*Error*: `{}`'.format(e),
                 parse_mode='Markdown',
                 chat_id=update.callback_query.message.chat.id,
                 message_id=update.callback_query.message.message_id
